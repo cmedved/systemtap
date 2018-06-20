@@ -8,6 +8,9 @@
  * later version.
  *
  * Copyright (C) 2007-2015 Red Hat Inc.
+ *
+ * Changes:
+ * 	- 2018-06-26 cmedved: Added an experimental "no copy" method. Use caution. 
  */
 
 #include "staprun.h"
@@ -41,6 +44,7 @@ int remote_id;
 const char *remote_uri;
 int relay_basedir_fd;
 int color_errors;
+int do_not_copy;
 color_modes color_mode;
 
 /* module variables */
@@ -125,8 +129,9 @@ void parse_args(int argc, char **argv)
         color_mode = color_auto;
         color_errors = isatty(STDERR_FILENO)
                 && strcmp(getenv("TERM") ?: "notdumb", "dumb");
+	do_not_copy = 0;
 
-	while ((c = getopt(argc, argv, "ALu::vhb:t:dc:o:x:N:S:DwRr:VT:C:"
+	while ((c = getopt(argc, argv, "ALu::vhb:t:dc:o:x:N:S:DwRr:VT:C:n"
 #ifdef HAVE_OPENAT
                            "F:"
 #endif
@@ -171,6 +176,9 @@ void parse_args(int argc, char **argv)
 			break;
 		case 'o':
 			outfile_name = optarg;
+			break;
+		case 'n':
+			do_not_copy = 1;
 			break;
 		case 'R':
 			rename_mod = 1;
@@ -251,7 +259,7 @@ void parse_args(int argc, char **argv)
 			usage(argv[0],1);
 		}
 	}
-	if (outfile_name) {
+	if (outfile_name && !do_not_copy) {
 		char tmp[PATH_MAX];
 		int ret;
 		outfile_name = get_abspath(outfile_name);
@@ -315,6 +323,14 @@ void parse_args(int argc, char **argv)
 		err(_("You have to specify output FILE with '-S' option.\n"));
 		usage(argv[0],1);
 	}
+	if (outfile_name != NULL && do_not_copy) {
+		err(_("You can't specify an output file with '-n' option.\n"));
+		usage(argv[0],1);
+	}
+	if (fsize_max != 0 && do_not_copy) {
+		err(_("You can't specify a max out file size with '-n' option.\n"));
+		usage(argv[0],1);
+	}
 }
 
 void usage(char *prog, int rc)
@@ -363,6 +379,9 @@ void usage(char *prog, int rc)
 #ifdef HAVE_OPENAT
         "-F fd           Specifies file descriptor for module relay directory\n"
 #endif
+	"-n              Does not copy data from the relayfs buffers. An external\n"
+	"                application must read the buffers located in\n"
+	"                /sys/kernel/debug/systemtap/MODULE_NAME\n"
 	"\n"
 	"MODULE can be either a module name or a module path.  If a\n"
 	"module name is used, it is searched in the following directory:\n"));

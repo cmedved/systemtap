@@ -8,6 +8,10 @@
  * later version.
  *
  * Copyright (C) 2007-2013 Red Hat Inc.
+ &
+ * Changes:
+ * 	- 2018-06-26 cmedved: If do_not_copy, don't create reader threads. Also,
+ *						  poll timeout always applies, even in bulk mode.
  */
 
 #include "staprun.h"
@@ -143,13 +147,13 @@ static void *reader_thread(void *data)
 		CPU_SET(cpu, &cpu_mask);
 		if( sched_setaffinity( 0, sizeof(cpu_mask), &cpu_mask ) < 0 )
 			_perr("sched_setaffinity");
+
+		/* 05/31/2018: Time out is not set to NULL for bulk mode. A sane value must be specified via -T */
 #ifdef NEED_PPOLL
 		/* Without a real ppoll, there is a small race condition that could */
 		/* block ppoll(). So use a timeout to prevent that. */
 		timeout->tv_sec = 10;
 		timeout->tv_nsec = 0;
-#else
-		timeout = NULL;
 #endif
 	}
 
@@ -300,7 +304,7 @@ int init_relayfs(void)
   			if (open_outfile(0, i, 0) < 0)
   				return -1;
 		}
-	} else if (bulkmode) {
+	} else if (bulkmode && !do_not_copy) {
 		for (i = 0; i < ncpus; i++) {
 			if (outfile_name) {
 				/* special case: for testing we sometimes want to write to /dev/null */
@@ -333,7 +337,7 @@ int init_relayfs(void)
 			if (set_clexec(out_fd[i]) < 0)
 				return -1;
 		}
-	} else {
+	} else if (!do_not_copy) {
 		/* stream mode */
 		if (outfile_name) {
 			len = stap_strfloctime(buf, PATH_MAX,
@@ -359,14 +363,16 @@ int init_relayfs(void)
         sa.sa_flags = 0;
         sigemptyset(&sa.sa_mask);
         sigaction(SIGUSR2, &sa, NULL);
-        dbug(2, "starting threads\n");
-        for (i = 0; i < ncpus; i++) {
-                if (pthread_create(&reader[i], NULL, reader_thread,
-                                   (void *)(long)i) < 0) {
-                        _perr("failed to create thread");
-                        return -1;
-                }
-        }
+		if (!do_not_copy) {
+	        dbug(2, "starting threads\n");
+	        for (i = 0; i < ncpus; i++) {
+	                if (pthread_create(&reader[i], NULL, reader_thread,
+	                                   (void *)(long)i) < 0) {
+	                        _perr("failed to create thread");
+	                        return -1;
+	                }
+	        }
+		}
 	
 	return 0;
 }

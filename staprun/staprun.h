@@ -8,6 +8,10 @@
  * later version.
  *
  * Copyright (C) 2005-2008 Red Hat Inc.
+ *
+ * Changes:
+ *
+ * 	- 2018-06-26 cmedved: Added do_not_copy flag. Experimental.
  */
 #define _FILE_OFFSET_BITS 64
 
@@ -255,6 +259,7 @@ extern int remote_id;
 extern const char *remote_uri;
 extern int relay_basedir_fd;
 extern int color_errors;
+extern int do_not_copy;
 
 typedef enum {color_never, color_auto, color_always} color_modes;
 extern color_modes color_mode;
